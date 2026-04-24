@@ -36,7 +36,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
 
       - name: Calculate Semantic Version (main only)
         id: semver
@@ -65,7 +64,7 @@ jobs:
           fi
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
   # ── JOB 2: TEST ─────────────────────────────────────────────────────────────
   test:
@@ -81,10 +80,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Run Tests
         run: npx vitest run --coverage --reporter=default
@@ -151,10 +149,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Install snyk-to-html
         run: npm install -g snyk-to-html
