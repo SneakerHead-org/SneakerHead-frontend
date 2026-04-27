@@ -1,4 +1,4 @@
-name: CI - Frontend Service
+name: CI/CD - Frontend Service
 
 on:
   push:
@@ -173,7 +173,7 @@ jobs:
   build:
     name: "Docker Build"
     runs-on: ubuntu-latest
-    needs: [prepare, test, sonar]
+    needs: [prepare, test, sonar, snyk]
 
     steps:
       - name: Checkout
@@ -292,11 +292,99 @@ jobs:
             Image: ${{ secrets.DOCKER_USERNAME }}/${{ env.SERVICE_NAME }}:${{ needs.prepare.outputs.tag }}
           generate_release_notes: true
 
-  # ── JOB 9: NOTIFY ───────────────────────────────────────────────────────────
+  # ── JOB 9: UPDATE HELM VALUES ────────────────────────────────────────────────
+  # Updates frontend.image.tag in the correct values file so ArgoCD picks up
+  # the new image. Tag comes directly from prepare.outputs.tag.
+  #
+  #   main branch → values-prod.yaml   (frontend.image.tag = v1.2.3)
+  #   dev branch  → values-dev.yaml    (frontend.image.tag = dev-abc1234)
+  update-helm:
+    name: "CD - Update Helm Values"
+    runs-on: ubuntu-latest
+    needs: [prepare, push]
+    if: needs.push.result == 'success'
+
+    steps:
+      # ── Determine which values file to update ──────────────────────────
+      - name: Resolve target values file
+        id: resolve
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "values_file=values-prod.yaml" >> $GITHUB_OUTPUT
+            echo "env=prod"                     >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
+            echo "values_file=values-dev.yaml"  >> $GITHUB_OUTPUT
+            echo "env=dev"                      >> $GITHUB_OUTPUT
+          fi
+
+      # ── Generate GitHub App Token for cross-repo push ────────────────
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ secrets.MANIFEST_REPO }}
+
+      # ── Checkout manifest repo ───────────────────────────────────────
+      - name: Checkout manifest repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/${{ secrets.MANIFEST_REPO }}
+          token: ${{ steps.app-token.outputs.token }}
+          path: manifest-repo
+
+      # ── Verify the values file exists ────────────────────────────────
+      - name: Verify values file exists
+        run: |
+          VALUES_FILE="manifest-repo/helm/sneakerhead/${{ steps.resolve.outputs.values_file }}"
+          if [[ ! -f "${VALUES_FILE}" ]]; then
+            echo "::error::Values file not found: ${VALUES_FILE}"
+            ls -la "manifest-repo/helm/sneakerhead/" 2>/dev/null || echo "Directory does not exist"
+            exit 1
+          fi
+          echo "Found: ${VALUES_FILE}"
+
+      # ── Update frontend.image.tag ─────────────────────────────────────
+      # values-dev.yaml / values-prod.yaml structure:
+      #   frontend:
+      #     image:
+      #       repository: yaswanthreddy1602/sneakerhead-frontend
+      #       tag: <THIS IS WHAT WE UPDATE>
+      - name: Update image tag in ${{ steps.resolve.outputs.values_file }}
+        run: |
+          TAG="${{ needs.prepare.outputs.tag }}"
+          VALUES_FILE="manifest-repo/helm/sneakerhead/${{ steps.resolve.outputs.values_file }}"
+
+          echo "Updating frontend.image.tag to ${TAG} in ${VALUES_FILE}"
+          yq e '."frontend".image.tag = "'"${TAG}"'"' -i "${VALUES_FILE}"
+
+          echo "-- Updated values --"
+          yq e '."frontend".image' "${VALUES_FILE}"
+
+      # ── Commit & push ────────────────────────────────────────────────
+      - name: Commit and push to manifest repo
+        run: |
+          TAG="${{ needs.prepare.outputs.tag }}"
+          ENV="${{ steps.resolve.outputs.env }}"
+          VALUES_FILE="helm/sneakerhead/${{ steps.resolve.outputs.values_file }}"
+
+          cd manifest-repo
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add "${VALUES_FILE}"
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+
+          git commit -m "chore(frontend): bump ${ENV} image tag to ${TAG} [skip ci]"
+          git push
+
+  # ── JOB 10: NOTIFY ──────────────────────────────────────────────────────────
   notify:
     name: "Notify"
     runs-on: ubuntu-latest
-    needs: [prepare, test, sonar, build, trivy, push, create-release]
+    needs: [prepare, test, sonar, build, trivy, push, create-release, update-helm]
     if: always() && github.ref == 'refs/heads/main'
 
     steps:
@@ -308,13 +396,14 @@ jobs:
           server_port: ${{ secrets.SMTP_PORT }}
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "CI Success - ${{ env.SERVICE_NAME }} ${{ needs.prepare.outputs.tag }}"
+          subject: "CI/CD Success - ${{ env.SERVICE_NAME }} ${{ needs.prepare.outputs.tag }}"
           body: |
-            Build Successful
+            Build & Deploy Successful
 
             Service:      ${{ env.SERVICE_NAME }}
             Tag:          ${{ needs.prepare.outputs.tag }}
             Image:        ${{ secrets.DOCKER_USERNAME }}/${{ env.SERVICE_NAME }}:${{ needs.prepare.outputs.tag }}
+            Helm Updated: helm/sneakerhead/frontend.image.tag
             Repository:   ${{ github.repository }}
             Triggered By: ${{ github.actor }}
           to: ${{ secrets.EMAIL_TO }}
@@ -328,9 +417,9 @@ jobs:
           server_port: ${{ secrets.SMTP_PORT }}
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "CI Failed - ${{ env.SERVICE_NAME }} - Run #${{ github.run_number }}"
+          subject: "CI/CD Failed - ${{ env.SERVICE_NAME }} - Run #${{ github.run_number }}"
           body: |
-            CI Pipeline Execution Failed
+            CI/CD Pipeline Execution Failed
 
             Service:       ${{ env.SERVICE_NAME }}
             Tag Attempted: ${{ needs.prepare.outputs.tag }}

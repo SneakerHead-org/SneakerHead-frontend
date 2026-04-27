@@ -15,12 +15,12 @@
 .size-toggles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .size-toggle { padding: 8px 4px; font-size: 13px; font-weight: 600; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); transition: var(--transition); }
 .size-toggle.active { background: var(--accent); color: #000; border-color: var(--accent); }
-.price-range { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.price-range input { width: 100%; padding: 8px 12px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; }
+.price-range { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; width: 100%; }
+.price-range input { flex: 1; min-width: 0; padding: 8px 10px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px; text-align: center; }
 .price-range input:focus { outline: none; border-color: var(--accent); }
 .price-slider { width: 100%; accent-color: var(--accent); }
-.category-btns { display: flex; flex-wrap: wrap; gap: 6px; }
-.category-btn { padding: 6px 14px; font-size: 12px; font-weight: 600; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 20px; color: var(--text-secondary); transition: var(--transition); }
+.category-btns { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; align-items: flex-start; justify-content: flex-start; }
+.category-btn { padding: 6px 14px; font-size: 12px; font-weight: 600; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 20px; color: var(--text-secondary); transition: var(--transition); text-align: left; }
 .category-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
 
 /* ── Product List Content ──────────── */
