@@ -79,7 +79,7 @@ export default function Home() {
           <div className="hero-overlay"></div>
         </div>
         <div className="hero-content">
-          <div className="hero-badge"><TrendingUp size={14} /> NEW SEASON 2024</div>
+          <div className="hero-badge"><TrendingUp size={14} /> NEW SEASON 2026</div>
           <h1 className="hero-title">
             STEP INTO<br />THE <span className="accent">CULTURE</span>
           </h1>
