@@ -1,4 +1,4 @@
-# sneakerhead/frontend-service/Dockerfile
+# sneakerhead/frontend-service/Dockerfile..
 
 # ── Stage 1: builder ──────────────────────────────
 FROM node:20-alpine AS builder
